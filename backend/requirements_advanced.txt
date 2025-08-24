@@ -1,0 +1,7 @@
+flask==3.0.0
+flask-cors==4.0.0
+python-chess==1.999
+torch>=2.0.0
+transformers>=4.30.0
+numpy>=1.21.0
+requests>=2.25.0

@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smooth Chess Game - Working Version</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .app {
+            display: flex;
+            gap: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 2rem;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .game-title {
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1rem;
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 480px;
+            height: 480px;
+            border: 4px solid #8B4513;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .square {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .square.light {
+            background-color: #f0d9b5;
+        }
+
+        .square.dark {
+            background-color: #b58863;
+        }
+
+        .square.selected {
+            background-color: #f7ec74 !important;
+            box-shadow: inset 0 0 0 3px #f7ec74;
+        }
+
+        .square.legal-move {
+            background-color: rgba(255, 255, 0, 0.3) !important;
+        }
+
+        .square.legal-move::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(0, 128, 0, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .square.capture-move::after {
+            width: 100%;
+            height: 100%;
+            border-radius: 0;
+            border: 3px solid rgba(255, 0, 0, 0.6);
+            background-color: transparent;
+        }
+
+        .piece {
+            font-size: 40px;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            z-index: 10;
+            filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        .piece:hover {
+            transform: scale(1.1);
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.4));
+        }
+
+        .piece.moving {
+            z-index: 100;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            color: white;
+            min-width: 250px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-label {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .rating-control {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .rating-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .rating-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .rating-button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .rating-button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .status-display {
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .game-status {
+            font-size: 1.1rem;
+            text-align: center;
+            padding: 0.5rem;
+        }
+
+        .game-status.thinking {
+            color: #ffd93d;
+            font-style: italic;
+        }
+
+        .game-status.checkmate {
+            color: #ff0000;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .error-message {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .success-message {
+            color: #51cf66;
+            background: rgba(81, 207, 102, 0.1);
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="game-container">
+            <h1 class="game-title">Smooth Chess</h1>
+            
+            <div class="chessboard" id="chessboard"></div>
+
+            <div class="game-status" id="gameStatus">
+                Click "New Game" to start
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="control-label">Game Controls</div>
+                <button class="button" onclick="newGame()">New Game</button>
+                <button class="button" onclick="resetGame()">Reset</button>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">AI Difficulty</div>
+                <div class="rating-control">
+                    <button class="rating-button" onclick="changeRating(-100)" id="ratingDown">-</button>
+                    <div class="rating-display" id="ratingDisplay">1500</div>
+                    <button class="rating-button" onclick="changeRating(100)" id="ratingUp">+</button>
+                </div>
+            </div>
+
+            <div class="status-display">
+                <div><strong>You:</strong> <span id="humanColor">white</span></div>
+                <div><strong>AI:</strong> <span id="aiColor">black</span></div>
+                <div><strong>Turn:</strong> <span id="currentTurn">white</span></div>
+                <div><strong>Rating:</strong> <span id="currentRating">1500</span></div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">Animation</div>
+                <div style="font-size: 0.9rem; opacity: 0.8;">
+                    ✨ Smooth 400ms CSS transitions<br/>
+                    🎯 Hardware accelerated<br/>
+                    🚀 Zero jitter guarantee
+                </div>
+            </div>
+
+            <div id="messageArea"></div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            board: Array(64).fill(null),
+            selectedSquare: null,
+            legalMoves: [],
+            gameOver: false,
+            result: null,
+            humanColor: 'white',
+            currentTurn: 'white',
+            gameId: 'html-chess-game',
+            aiThinking: false
+        };
+
+        let currentRating = 1500;
+        
+        // Piece symbols
+        const PIECE_SYMBOLS = {
+            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
+            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
+        };
+
+        // API base URL
+        const API_BASE = 'http://localhost:5000/api';
+
+        // Convert FEN to board array
+        function fenToBoard(fen) {
+            const [position] = fen.split(' ');
+            const board = Array(64).fill(null);
+            let square = 0;
+            
+            for (const char of position) {
+                if (char === '/') continue;
+                if (char >= '1' && char <= '8') {
+                    square += parseInt(char);
+                } else {
+                    board[square] = char;
+                    square++;
+                }
+            }
+            
+            return board;
+        }
+
+        // Convert square notation to index
+        function squareToIndex(square) {
+            const file = square.charCodeAt(0) - 97; // a-h to 0-7
+            const rank = parseInt(square[1]) - 1;    // 1-8 to 0-7
+            return (7 - rank) * 8 + file;
+        }
+
+        // Convert index to square notation
+        function indexToSquare(index) {
+            const file = String.fromCharCode(97 + (index % 8));
+            const rank = 8 - Math.floor(index / 8);
+            return file + rank;
+        }
+
+        // Show message
+        function showMessage(message, type = 'info') {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="${type}-message">${message}</div>`;
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 3000);
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('humanColor').textContent = gameState.humanColor;
+            document.getElementById('aiColor').textContent = gameState.humanColor === 'white' ? 'black' : 'white';
+            document.getElementById('currentTurn').textContent = gameState.currentTurn;
+            document.getElementById('currentRating').textContent = currentRating;
+            document.getElementById('ratingDisplay').textContent = currentRating;
+            
+            // Update rating buttons
+            document.getElementById('ratingDown').disabled = currentRating <= 400;
+            document.getElementById('ratingUp').disabled = currentRating >= 3000;
+        }
+
+        // Create board
+        function createBoard() {
+            const chessboard = document.getElementById('chessboard');
+            chessboard.innerHTML = '';
+            
+            for (let i = 0; i < 64; i++) {
+                const square = document.createElement('div');
+                square.className = `square ${(Math.floor(i / 8) + i % 8) % 2 === 0 ? 'light' : 'dark'}`;
+                square.dataset.index = i;
+                square.onclick = () => handleSquareClick(i);
+                chessboard.appendChild(square);
+            }
+        }
+
+        // Render pieces
+        function renderPieces() {
+            const squares = document.querySelectorAll('.square');
+            
+            squares.forEach((square, index) => {
+                const piece = gameState.board[index];
+                const existingPiece = square.querySelector('.piece');
+                
+                if (existingPiece) {
+                    existingPiece.remove();
+                }
+                
+                if (piece) {
+                    const pieceElement = document.createElement('div');
+                    pieceElement.className = 'piece';
+                    pieceElement.textContent = PIECE_SYMBOLS[piece];
+                    square.appendChild(pieceElement);
+                }
+            });
+        }
+
+        // Update highlights
+        function updateHighlights() {
+            const squares = document.querySelectorAll('.square');
+            
+            squares.forEach((square, index) => {
+                square.classList.remove('selected', 'legal-move', 'capture-move');
+                
+                if (gameState.selectedSquare === index) {
+                    square.classList.add('selected');
+                }
+                
+                if (gameState.selectedSquare !== null) {
+                    const legalMoves = getLegalMovesForSquare(gameState.selectedSquare);
+                    if (legalMoves.includes(index)) {
+                        square.classList.add('legal-move');
+                        if (gameState.board[index]) {
+                            square.classList.add('capture-move');
+                        }
+                    }
+                }
+            });
+        }
+
+        // Get legal moves for selected piece
+        function getLegalMovesForSquare(squareIndex) {
+            if (gameState.selectedSquare !== squareIndex) return [];
+            
+            const fromSquare = indexToSquare(squareIndex);
+            return gameState.legalMoves
+                .filter(move => move.startsWith(fromSquare))
+                .map(move => squareToIndex(move.substring(2, 4)));
+        }
+
+        // Handle square click
+        async function handleSquareClick(index) {
+            if (gameState.aiThinking || gameState.gameOver) return;
+
+            const square = indexToSquare(index);
+            
+            if (gameState.selectedSquare === null) {
+                // Select piece
+                if (gameState.board[index]) {
+                    const piece = gameState.board[index];
+                    const isWhitePiece = piece === piece.toUpperCase();
+                    const canMove = (gameState.humanColor === 'white' && isWhitePiece) ||
+                                   (gameState.humanColor === 'black' && !isWhitePiece);
+                    
+                    if (canMove && gameState.currentTurn === gameState.humanColor) {
+                        gameState.selectedSquare = index;
+                        updateHighlights();
+                    }
+                }
+            } else {
+                // Move piece
+                const fromSquare = indexToSquare(gameState.selectedSquare);
+                const moveUci = fromSquare + square;
+                
+                if (gameState.legalMoves.includes(moveUci)) {
+                    await makeMove(moveUci);
+                } else {
+                    gameState.selectedSquare = null;
+                    updateHighlights();
+                }
+            }
+        }
+
+        // Make move
+        async function makeMove(moveUci) {
+            try {
+                updateGameStatus('Making move...');
+                
+                const response = await fetch(`${API_BASE}/make_move`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        game_id: gameState.gameId,
+                        move: moveUci
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Animate the move
+                    await animateMove(gameState.selectedSquare, squareToIndex(moveUci.substring(2, 4)));
+                    
+                    // Update game state
+                    gameState.board = fenToBoard(data.board_fen);
+                    gameState.legalMoves = data.legal_moves;
+                    gameState.gameOver = data.game_over;
+                    gameState.result = data.result;
+                    gameState.selectedSquare = null;
+                    gameState.currentTurn = gameState.currentTurn === 'white' ? 'black' : 'white';
+                    
+                    renderPieces();
+                    updateHighlights();
+                    updateUI();
+
+                    if (gameState.gameOver) {
+                        updateGameStatus(getGameOverMessage());
+                    } else {
+                        updateGameStatus(`${gameState.currentTurn}'s turn`);
+                        
+                        // Get AI move if it's AI's turn
+                        if (gameState.currentTurn !== gameState.humanColor) {
+                            setTimeout(() => getAiMove(), 500); // Small delay for better UX
+                        }
+                    }
+                } else {
+                    showMessage(data.error || 'Move failed', 'error');
+                    gameState.selectedSquare = null;
+                    updateHighlights();
+                }
+            } catch (error) {
+                console.error('Error making move:', error);
+                showMessage('Failed to make move. Check if backend is running.', 'error');
+                gameState.selectedSquare = null;
+                updateHighlights();
+            }
+        }
+
+        // Animate move
+        function animateMove(fromIndex, toIndex) {
+            return new Promise(resolve => {
+                const fromSquare = document.querySelector(`[data-index="${fromIndex}"]`);
+                const toSquare = document.querySelector(`[data-index="${toIndex}"]`);
+                const piece = fromSquare.querySelector('.piece');
+                
+                if (piece) {
+                    piece.classList.add('moving');
+                    
+                    // Calculate movement
+                    const fromRect = fromSquare.getBoundingClientRect();
+                    const toRect = toSquare.getBoundingClientRect();
+                    const deltaX = toRect.left - fromRect.left;
+                    const deltaY = toRect.top - fromRect.top;
+                    
+                    piece.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    
+                    setTimeout(() => {
+                        piece.style.transform = '';
+                        piece.classList.remove('moving');
+                        resolve();
+                    }, 400);
+                } else {
+                    resolve();
+                }
+            });
+        }
+
+        // Get AI move
+        async function getAiMove() {
+            try {
+                gameState.aiThinking = true;
+                updateGameStatus('AI is thinking...');
+                
+                const response = await fetch(`${API_BASE}/get_ai_move`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        game_id: gameState.gameId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const aiMove = data.ai_move;
+                    const fromIndex = squareToIndex(aiMove.substring(0, 2));
+                    const toIndex = squareToIndex(aiMove.substring(2, 4));
+
+                    // Animate AI move
+                    await animateMove(fromIndex, toIndex);
+                    
+                    // Update game state
+                    gameState.board = fenToBoard(data.board_fen);
+                    gameState.legalMoves = data.legal_moves;
+                    gameState.gameOver = data.game_over;
+                    gameState.result = data.result;
+                    gameState.currentTurn = gameState.currentTurn === 'white' ? 'black' : 'white';
+                    
+                    renderPieces();
+                    updateUI();
+
+                    if (gameState.gameOver) {
+                        updateGameStatus(getGameOverMessage());
+                    } else {
+                        updateGameStatus(`${gameState.currentTurn}'s turn`);
+                    }
+                } else {
+                    showMessage(data.error || 'AI move failed', 'error');
+                }
+            } catch (error) {
+                console.error('Error getting AI move:', error);
+                showMessage('Failed to get AI move. Check if backend is running.', 'error');
+            } finally {
+                gameState.aiThinking = false;
+            }
+        }
+
+        // New game
+        async function newGame() {
+            try {
+                updateGameStatus('Starting new game...');
+                
+                const response = await fetch(`${API_BASE}/new_game`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        game_id: gameState.gameId,
+                        rating: currentRating,
+                        human_color: gameState.humanColor
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    gameState.board = fenToBoard(data.board_fen);
+                    gameState.legalMoves = data.legal_moves;
+                    gameState.gameOver = false;
+                    gameState.result = null;
+                    gameState.selectedSquare = null;
+                    gameState.currentTurn = 'white';
+                    gameState.aiThinking = false;
+                    
+                    renderPieces();
+                    updateHighlights();
+                    updateUI();
+                    updateGameStatus(`${gameState.currentTurn}'s turn`);
+                    
+                    showMessage('New game started!', 'success');
+                } else {
+                    showMessage(data.error || 'Failed to start new game', 'error');
+                }
+            } catch (error) {
+                console.error('Error starting new game:', error);
+                showMessage('Failed to start new game. Check if backend is running.', 'error');
+            }
+        }
+
+        // Reset game
+        async function resetGame() {
+            try {
+                updateGameStatus('Resetting game...');
+                
+                const response = await fetch(`${API_BASE}/reset_game`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        game_id: gameState.gameId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    gameState.board = fenToBoard(data.board_fen);
+                    gameState.legalMoves = data.legal_moves;
+                    gameState.gameOver = false;
+                    gameState.result = null;
+                    gameState.selectedSquare = null;
+                    gameState.currentTurn = 'white';
+                    gameState.aiThinking = false;
+                    
+                    renderPieces();
+                    updateHighlights();
+                    updateUI();
+                    updateGameStatus(`${gameState.currentTurn}'s turn`);
+                    
+                    showMessage('Game reset!', 'success');
+                } else {
+                    showMessage(data.error || 'Failed to reset game', 'error');
+                }
+            } catch (error) {
+                console.error('Error resetting game:', error);
+                showMessage('Failed to reset game. Check if backend is running.', 'error');
+            }
+        }
+
+        // Change rating
+        async function changeRating(delta) {
+            const newRating = Math.max(400, Math.min(3000, currentRating + delta));
+            
+            try {
+                const response = await fetch(`${API_BASE}/set_difficulty`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        game_id: gameState.gameId,
+                        rating: newRating
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentRating = data.new_rating;
+                    updateUI();
+                    showMessage(`AI difficulty set to ${currentRating}`, 'success');
+                } else {
+                    showMessage(data.error || 'Failed to change difficulty', 'error');
+                }
+            } catch (error) {
+                console.error('Error changing rating:', error);
+                showMessage('Failed to change difficulty. Check if backend is running.', 'error');
+            }
+        }
+
+        // Update game status
+        function updateGameStatus(message) {
+            const statusElement = document.getElementById('gameStatus');
+            statusElement.textContent = message;
+            
+            statusElement.className = 'game-status';
+            if (message.includes('thinking')) {
+                statusElement.classList.add('thinking');
+            } else if (message.includes('Game Over') || message.includes('Wins') || message.includes('Checkmate')) {
+                statusElement.classList.add('checkmate');
+            }
+        }
+
+        // Get game over message
+        function getGameOverMessage() {
+            if (gameState.result === 'white_wins') {
+                return 'Game Over: White Wins!';
+            } else if (gameState.result === 'black_wins') {
+                return 'Game Over: Black Wins!';
+            } else {
+                return 'Game Over: Draw!';
+            }
+        }
+
+        // Initialize game
+        async function initGame() {
+            createBoard();
+            updateUI();
+            updateGameStatus('Click "New Game" to start');
+            
+            // Test backend connection
+            try {
+                const response = await fetch('http://localhost:5000/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    showMessage(`Connected to backend: ${data.message}`, 'success');
+                } else {
+                    showMessage('Backend not responding. Make sure Flask server is running.', 'error');
+                }
+            } catch (error) {
+                showMessage('Cannot connect to backend. Make sure Flask server is running on localhost:5000.', 'error');
+            }
+        }
+
+        // Start the game when page loads
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>

@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vexora's Bot</title>
+    
+    <!-- React and Babel from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Performance optimizations for buttery smooth animations */
+        .piece, .animated-piece, .square, .chessboard {
+            -webkit-transform: translateZ(0);
+            -moz-transform: translateZ(0);
+            -ms-transform: translateZ(0);
+            -o-transform: translateZ(0);
+            transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+            -moz-backface-visibility: hidden;
+            -ms-backface-visibility: hidden;
+            backface-visibility: hidden;
+            -webkit-perspective: 1000;
+            -moz-perspective: 1000;
+            -ms-perspective: 1000;
+            perspective: 1000;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app {
+            display: flex;
+            gap: 2rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .game-title {
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1rem;
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 480px;
+            height: 480px;
+            border: 4px solid #8B4513;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            position: relative;
+            will-change: transform;
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            transform: translate3d(0, 0, 0);
+        }
+
+        .square {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.1s ease;
+            will-change: background-color;
+            backface-visibility: hidden;
+            transform: translateZ(0);
+        }
+
+        .square.light {
+            background-color: #f0d9b5;
+        }
+
+        .square.dark {
+            background-color: #b58863;
+        }
+
+        .square.selected {
+            background-color: #f7ec74 !important;
+            box-shadow: inset 0 0 0 3px #f7ec74;
+        }
+
+        .square.legal-move {
+            background-color: rgba(255, 255, 0, 0.3) !important;
+        }
+
+        .square.legal-move::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(0, 128, 0, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .square.capture-move::after {
+            width: 100%;
+            height: 100%;
+            border-radius: 0;
+            border: 3px solid rgba(255, 0, 0, 0.6);
+            background-color: transparent;
+        }
+
+        .piece {
+            font-size: 40px;
+            transition: transform 0.15s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.15s ease;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            z-index: 10;
+            filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+            will-change: transform;
+            backface-visibility: hidden;
+            transform: translateZ(0);
+        }
+
+        .piece:hover {
+            transform: scale(1.05) translateZ(0);
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.4));
+        }
+
+        .piece.moving {
+            z-index: 100;
+            transition: transform 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .animated-piece {
+            position: absolute;
+            font-size: 40px;
+            z-index: 100;
+            pointer-events: none;
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.4));
+            transition: transform 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+            transform-origin: center center;
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            color: white;
+            min-width: 250px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-label {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-display {
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .rating-control {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .rating-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .rating-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .rating-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .rating-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .game-status {
+            font-size: 1.1rem;
+            text-align: center;
+            padding: 0.5rem;
+        }
+
+        .game-status.checkmate {
+            color: #ff0000;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        .game-result-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .game-result-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 3rem;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .result-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .result-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        .result-message {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.4;
+        }
+
+        .result-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .result-button {
+            padding: 0.8rem 2rem;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .result-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .result-button.primary {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        .result-button.primary:hover {
+            background: #45a049;
+        }
+
+        .victory-animation {
+            animation: victoryBounce 1s ease-in-out;
+        }
+
+        .defeat-animation {
+            animation: defeatShake 0.5s ease-in-out;
+        }
+
+        @keyframes victoryBounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-20px); }
+            60% { transform: translateY(-10px); }
+        }
+
+        @keyframes defeatShake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .thinking {
+            color: #ffd93d;
+            font-style: italic;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .app {
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }
+            
+            .chessboard {
+                width: 320px;
+                height: 320px;
+            }
+            
+            .piece {
+                font-size: 28px;
+            }
+            
+            .animated-piece {
+                font-size: 28px;
+            }
+            
+            .controls {
+                min-width: auto;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        const PIECE_SYMBOLS = {
+            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
+            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
+        };
+
+        const API_BASE = 'http://localhost:5001/api';
+        
+        function ChessGame() {
+            const [gameState, setGameState] = useState({
+                board: Array(64).fill(null),
+                selectedSquare: null,
+                legalMoves: [],
+                gameOver: false,
+                result: null,
+                humanColor: 'white',
+                currentTurn: 'white',
+                moveHistory: []
+            });
+            
+            const [aiState, setAiState] = useState({
+                thinking: false,
+                rating: 1500
+            });
+            
+            const [animatingMove, setAnimatingMove] = useState(null);
+            const [gameId] = useState('html-game');
+
+            // Convert FEN to board array
+            const fenToBoard = useCallback((fen) => {
+                const [position] = fen.split(' ');
+                const board = Array(64).fill(null);
+                let square = 0;
+                
+                for (const char of position) {
+                    if (char === '/') continue;
+                    if (char >= '1' && char <= '8') {
+                        square += parseInt(char);
+                    } else {
+                        board[square] = char;
+                        square++;
+                    }
+                }
+                
+                return board;
+            }, []);
+
+            // Convert square notation to index
+            const squareToIndex = useCallback((square) => {
+                const file = square.charCodeAt(0) - 97; // a-h to 0-7
+                const rank = parseInt(square[1]) - 1;    // 1-8 to 0-7
+                return (7 - rank) * 8 + file;
+            }, []);
+
+            // Convert index to square notation
+            const indexToSquare = useCallback((index) => {
+                const file = String.fromCharCode(97 + (index % 8));
+                const rank = 8 - Math.floor(index / 8);
+                return file + rank;
+            }, []);
+
+            // Initialize game
+            useEffect(() => {
+                const initGame = async () => {
+                    try {
+                        const response = await axios.post(`${API_BASE}/new_game`, {
+                            game_id: gameId,
+                            rating: aiState.rating,
+                            human_color: gameState.humanColor
+                        });
+                        
+                        if (response.data.success) {
+                            setGameState(prev => ({
+                                ...prev,
+                                board: fenToBoard(response.data.board_fen),
+                                legalMoves: response.data.legal_moves,
+                                gameOver: response.data.game_over,
+                                currentTurn: 'white'
+                            }));
+                            
+                            // If human is playing black, AI should move first
+                            if (gameState.humanColor === 'black') {
+                                setTimeout(() => getAiMove(), 500);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to initialize game:', error);
+                    }
+                };
+
+                initGame();
+            }, [gameId, aiState.rating, gameState.humanColor, fenToBoard, getAiMove]);
+
+            // Make human move with smooth animation
+            const makeMove = async (fromSquare, toSquare) => {
+                const moveUci = fromSquare + toSquare;
+                
+                try {
+                    // Start animation
+                    const fromIndex = squareToIndex(fromSquare);
+                    const toIndex = squareToIndex(toSquare);
+                    const piece = gameState.board[fromIndex];
+                    const targetPiece = gameState.board[toIndex]; // Check if there's a piece to capture
+                    
+                    setAnimatingMove({
+                        from: fromIndex,
+                        to: toIndex,
+                        piece: piece
+                    });
+
+                    const response = await axios.post(`${API_BASE}/make_move`, {
+                        game_id: gameId,
+                        move: moveUci
+                    });
+
+                    if (response.data.success) {
+                        // Wait for animation to complete
+                        setTimeout(() => {
+                            const nextTurn = gameState.currentTurn === 'white' ? 'black' : 'white';
+                            
+                            setGameState(prev => ({
+                                ...prev,
+                                board: fenToBoard(response.data.board_fen),
+                                legalMoves: response.data.legal_moves,
+                                gameOver: response.data.game_over,
+                                result: response.data.result,
+                                selectedSquare: null,
+                                currentTurn: nextTurn
+                            }));
+                            setAnimatingMove(null);
+
+                            // Get AI move if game is not over and it's AI's turn
+                            if (!response.data.game_over) {
+                                if ((gameState.humanColor === 'white' && nextTurn === 'black') ||
+                                    (gameState.humanColor === 'black' && nextTurn === 'white')) {
+                                    setTimeout(() => getAiMove(), 100); // Small delay to ensure state is updated
+                                }
+                            }
+                        }, 150); // Match CSS transition duration
+                    }
+                } catch (error) {
+                    console.error('Failed to make move:', error);
+                    setAnimatingMove(null);
+                }
+            };
+
+            // Get AI move with animation
+            const getAiMove = useCallback(async () => {
+                setAiState(prev => ({ ...prev, thinking: true }));
+                
+                try {
+                    const response = await axios.post(`${API_BASE}/get_ai_move`, {
+                        game_id: gameId
+                    });
+
+                    if (response.data.success) {
+                        const aiMove = response.data.move;
+                        console.log('AI Move received:', aiMove, response.data);
+                        const fromSquare = aiMove.substring(0, 2);
+                        const toSquare = aiMove.substring(2, 4);
+                        
+                        // Check if AI move is a capture
+                        const fromIndex = squareToIndex(fromSquare);
+                        const toIndex = squareToIndex(toSquare);
+                        const targetPiece = gameState.board[toIndex];
+                        
+                        // Start AI move animation
+                        setAnimatingMove({
+                            from: fromIndex,
+                            to: toIndex,
+                            piece: gameState.board[fromIndex]
+                        });
+
+                        // Wait for animation
+                        setTimeout(() => {
+                            setGameState(prev => ({
+                                ...prev,
+                                board: fenToBoard(response.data.board_fen),
+                                legalMoves: response.data.legal_moves,
+                                gameOver: response.data.game_over,
+                                result: response.data.result,
+                                currentTurn: prev.currentTurn === 'white' ? 'black' : 'white'
+                            }));
+                            setAnimatingMove(null);
+                            setAiState(prev => ({ ...prev, thinking: false }));
+                        }, 150);
+                    }
+                } catch (error) {
+                    console.error('Failed to get AI move:', error);
+                    setAiState(prev => ({ ...prev, thinking: false }));
+                }
+            }, [gameId, squareToIndex, fenToBoard]);
+
+            // Handle square click
+            const handleSquareClick = (index) => {
+                if (animatingMove || aiState.thinking || gameState.gameOver) return;
+
+                const square = indexToSquare(index);
+                
+                if (gameState.selectedSquare === null) {
+                    // Select piece
+                    if (gameState.board[index]) {
+                        const piece = gameState.board[index];
+                        const isWhitePiece = piece === piece.toUpperCase();
+                        const canMove = (gameState.humanColor === 'white' && isWhitePiece) ||
+                                       (gameState.humanColor === 'black' && !isWhitePiece);
+                        
+                        if (canMove && gameState.currentTurn === gameState.humanColor) {
+                            setGameState(prev => ({ ...prev, selectedSquare: index }));
+                        }
+                    }
+                } else {
+                    // Move piece
+                    const fromSquare = indexToSquare(gameState.selectedSquare);
+                    const moveUci = fromSquare + square;
+                    
+                    if (gameState.legalMoves.includes(moveUci)) {
+                        makeMove(fromSquare, square);
+                    } else {
+                        setGameState(prev => ({ ...prev, selectedSquare: null }));
+                    }
+                }
+            };
+
+            // Reset game
+            const resetGame = async () => {
+                try {
+                    const response = await axios.post(`${API_BASE}/reset_game`, {
+                        game_id: gameId
+                    });
+
+                    if (response.data.success) {
+                        setGameState(prev => ({
+                            ...prev,
+                            board: fenToBoard(response.data.board_fen),
+                            legalMoves: response.data.legal_moves,
+                            gameOver: false,
+                            result: null,
+                            selectedSquare: null,
+                            currentTurn: 'white'
+                        }));
+                        setAnimatingMove(null);
+                        setAiState(prev => ({ ...prev, thinking: false }));
+                    }
+                } catch (error) {
+                    console.error('Failed to reset game:', error);
+                }
+            };
+
+            // Change difficulty
+            const changeDifficulty = async (newRating) => {
+                try {
+                    await axios.post(`${API_BASE}/set_difficulty`, {
+                        game_id: gameId,
+                        rating: newRating
+                    });
+                    setAiState(prev => ({ ...prev, rating: newRating }));
+                } catch (error) {
+                    console.error('Failed to change difficulty:', error);
+                }
+            };
+
+            // Get legal moves for selected piece
+            const getLegalMovesForSquare = (squareIndex) => {
+                if (gameState.selectedSquare !== squareIndex) return [];
+                
+                const fromSquare = indexToSquare(squareIndex);
+                return gameState.legalMoves
+                    .filter(move => move.startsWith(fromSquare))
+                    .map(move => squareToIndex(move.substring(2, 4)));
+            };
+
+            // Check if square is a legal move destination
+            const isLegalMoveDestination = (squareIndex) => {
+                if (gameState.selectedSquare === null) return false;
+                return getLegalMovesForSquare(gameState.selectedSquare).includes(squareIndex);
+            };
+
+            // Render animated piece
+            const renderAnimatedPiece = () => {
+                if (!animatingMove) return null;
+
+                const fromRow = Math.floor(animatingMove.from / 8);
+                const fromCol = animatingMove.from % 8;
+                const toRow = Math.floor(animatingMove.to / 8);
+                const toCol = animatingMove.to % 8;
+
+                const squareSize = 60; // 480px / 8 = 60px per square
+
+                return React.createElement('div', {
+                    className: 'animated-piece',
+                    style: {
+                        left: `${fromCol * squareSize + squareSize/2 - 20}px`,
+                        top: `${fromRow * squareSize + squareSize/2 - 20}px`,
+                        transform: `translate(${(toCol - fromCol) * squareSize}px, ${(toRow - fromRow) * squareSize}px)`
+                    }
+                }, PIECE_SYMBOLS[animatingMove.piece]);
+            };
+
+            // Render square
+            const renderSquare = (index) => {
+                const isLight = (Math.floor(index / 8) + index % 8) % 2 === 0;
+                const isSelected = gameState.selectedSquare === index;
+                const isLegalMove = isLegalMoveDestination(index);
+                const piece = gameState.board[index];
+                const isAnimatingFrom = animatingMove && animatingMove.from === index;
+                
+                return React.createElement('div', {
+                    key: index,
+                    className: `square ${isLight ? 'light' : 'dark'} ${isSelected ? 'selected' : ''} ${isLegalMove ? 'legal-move' : ''}`,
+                    onClick: () => handleSquareClick(index)
+                }, piece && !isAnimatingFrom && React.createElement('div', {
+                    className: 'piece'
+                }, PIECE_SYMBOLS[piece]));
+            };
+
+            // Check if human player won
+            const getGameResultInfo = () => {
+                if (!gameState.gameOver || !gameState.result) return null;
+                
+                const result = gameState.result.toLowerCase();
+                const humanWon = (gameState.humanColor === 'white' && result.includes('white wins')) ||
+                                 (gameState.humanColor === 'black' && result.includes('black wins'));
+                const isDraw = result.includes('draw') || result.includes('stalemate') || 
+                              result.includes('1/2-1/2') || result.includes('insufficient material') ||
+                              result.includes('threefold repetition') || result.includes('fifty-move rule');
+                
+                let message = gameState.result;
+                
+                // Provide more descriptive messages for draws
+                if (isDraw) {
+                    if (result.includes('stalemate')) {
+                        message = 'Draw by Stalemate';
+                    } else if (result.includes('insufficient material')) {
+                        message = 'Draw by Insufficient Material';
+                    } else if (result.includes('threefold repetition')) {
+                        message = 'Draw by Threefold Repetition';
+                    } else if (result.includes('fifty-move rule')) {
+                        message = 'Draw by Fifty-Move Rule';
+                    } else if (result.includes('1/2-1/2')) {
+                        message = 'Game Drawn';
+                    } else {
+                        message = 'Draw';
+                    }
+                }
+                
+                return {
+                    humanWon,
+                    isDraw,
+                    message
+                };
+            };
+
+            // Render game result modal
+            const renderGameResultModal = () => {
+                const resultInfo = getGameResultInfo();
+                if (!resultInfo) return null;
+
+                const { humanWon, isDraw, message } = resultInfo;
+                
+                return React.createElement('div', { className: 'game-result-modal' },
+                    React.createElement('div', { 
+                        className: `game-result-content ${humanWon ? 'victory-animation' : !isDraw ? 'defeat-animation' : ''}`
+                    },
+                        React.createElement('div', { className: 'result-icon' },
+                            humanWon ? '🏆' : isDraw ? '🤝' : '😔'
+                        ),
+                        React.createElement('div', { className: 'result-title' },
+                            humanWon ? 'VICTORY!' : isDraw ? 'DRAW!' : 'DEFEAT!'
+                        ),
+                        React.createElement('div', { className: 'result-message' }, message),
+                        React.createElement('div', { className: 'result-buttons' },
+                            React.createElement('button', {
+                                className: 'result-button primary',
+                                onClick: resetGame
+                            }, '🔄 Play Again'),
+                            React.createElement('button', {
+                                className: 'result-button',
+                                onClick: () => changeDifficulty(Math.max(400, Math.min(3000, aiState.rating + (humanWon ? 100 : -100))))
+                            }, humanWon ? '📈 Increase Difficulty' : '📉 Decrease Difficulty')
+                        )
+                    )
+                );
+            };
+
+            return React.createElement('div', { className: 'app' },
+                React.createElement('div', { className: 'game-container' },
+                    React.createElement('h1', { className: 'game-title' }, '♟️ Vexora\'s Bot'),
+                    
+                    React.createElement('div', { className: 'chessboard' },
+                        Array(64).fill(null).map((_, index) => renderSquare(index)),
+                        renderAnimatedPiece()
+                    ),
+
+                    React.createElement('div', { className: 'game-status' },
+                        aiState.thinking && React.createElement('span', { className: 'thinking' }, '🤖 AI is thinking...'),
+                        !gameState.gameOver && !aiState.thinking && React.createElement('div', null,
+                            `Turn: ${gameState.currentTurn === 'white' ? 'White ♔' : 'Black ♚'}`
+                        ),
+                        gameState.gameOver && React.createElement('div', { 
+                            className: 'checkmate',
+                            style: { opacity: 0.6 }
+                        }, '🏁 Game Finished')
+                    )
+                ),
+
+                React.createElement('div', { className: 'controls' },
+                    React.createElement('div', { className: 'control-group' },
+                        React.createElement('div', { className: 'control-label' }, 'Game Controls'),
+                        React.createElement('button', {
+                            className: 'button',
+                            onClick: resetGame
+                        }, '🔄 New Game')
+                    ),
+
+                    React.createElement('div', { className: 'control-group' },
+                        React.createElement('div', { className: 'control-label' }, 'AI Difficulty'),
+                        React.createElement('div', { className: 'rating-control' },
+                            React.createElement('button', {
+                                className: 'rating-button',
+                                onClick: () => changeDifficulty(Math.max(400, aiState.rating - 100)),
+                                disabled: aiState.rating <= 400
+                            }, '-'),
+                            React.createElement('div', { className: 'rating-display' }, aiState.rating),
+                            React.createElement('button', {
+                                className: 'rating-button',
+                                onClick: () => changeDifficulty(Math.min(3000, aiState.rating + 100)),
+                                disabled: aiState.rating >= 3000
+                            }, '+')
+                        )
+                    ),
+
+                    React.createElement('div', { className: 'status-display' },
+                        React.createElement('div', null, React.createElement('strong', null, 'You: '), gameState.humanColor),
+                        React.createElement('div', null, React.createElement('strong', null, 'AI: '), gameState.humanColor === 'white' ? 'black' : 'white'),
+                        React.createElement('div', null, React.createElement('strong', null, 'Rating: '), aiState.rating),
+                        aiState.thinking && React.createElement('div', { style: { color: '#ffff00', fontWeight: 'bold' } }, '🤔 AI is thinking...')
+                    )
+                ),
+                
+                // Game result modal
+                renderGameResultModal()
+            );
+        }
+
+        ReactDOM.render(React.createElement(ChessGame), document.getElementById('root'));
+    </script>
+</body>
+</html>
