@@ -123,4 +123,4 @@ This project is open source and available under the MIT License.
 
 ---
 
-**Built with ♟️ for professional chess gaming**
+**Built with ♟️ by Nagaraj335 - Professional Chess Gaming**
